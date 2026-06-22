@@ -3,7 +3,7 @@ upstream:
   type: "standalone"
   repo: https://github.com/openhwgroup/cve2
   branch: main
-  commit: e35390a7754f4e9acbce22840835a7a0f045ddc7
+  commit: a24bbd2a7a29b5a3062b4865dfb47181d6cc5ab9
 import:
   rtl:
     - path: "rtl"
@@ -15,5 +15,4 @@ import:
 license:
   spdx: Apache-2.0
   file: LICENSE
-
 metadata_locked: true
