@@ -3,7 +3,7 @@ upstream:
   type: "standalone"
   repo: https://github.com/openhwgroup/cve2
   branch: main
-  commit: a24bbd2a7a29b5a3062b4865dfb47181d6cc5ab9
+  commit: d079e8c8e6a08b330940ae123876ba0612bec18d
 import:
   rtl:
     - path: "rtl"
