@@ -964,7 +964,7 @@ module cve2_core import cve2_pkg::*; #(
     logic [3:0]    rvfi_mem_rmask;
     logic [3:0]    rvfi_mem_wmask;
     logic [31:0]   rvfi_mem_rdata;
-    logic [4:0]    rvfi_mem_wdata;
+    logic [31:0]   rvfi_mem_wdata;
   } rvfi_instr_if;
 
   logic            new_debug_req;

@@ -295,8 +295,16 @@ import cve2_pkg::*;
       CSR_MSTATUSH: csr_rdata_int = '0;
 
       // menvcfg: machine environment configuration, all zeros for CVE2 (none of the relevant
-      // features are implemented)
-      CSR_MENVCFG, CSR_MENVCFGH: csr_rdata_int = '0;
+      // features are implemented). Per the RISC-V Privileged spec ([RVpriv] SS3.1.18), these
+      // registers do not exist when U-mode is not supported, so access must be illegal in
+      // that case (matching the CSR_MSECCFG pattern above, gated on PMPEnable).
+      CSR_MENVCFG, CSR_MENVCFGH: begin
+        if (umode_control) begin
+          csr_rdata_int = '0;
+        end else begin
+          illegal_csr = 1'b1;
+        end
+      end
 
       // misa
       CSR_MISA: csr_rdata_int = MISA_VALUE;
@@ -310,9 +318,14 @@ import cve2_pkg::*;
         csr_rdata_int[CSR_MFIX_BIT_HIGH:CSR_MFIX_BIT_LOW] = mie_q.irq_fast;
       end
 
-      // mcounteren: machine counter enable
+      // mcounteren: machine counter enable. Per [RVpriv] SS3.1.11, "In
+      // systems without U-mode, the mcounteren register should not exist."
       CSR_MCOUNTEREN: begin
-        csr_rdata_int = '0;
+        if (umode_control) begin
+          csr_rdata_int = '0;
+        end else begin
+          illegal_csr = 1'b1;
+        end
       end
 
       CSR_MSCRATCH: csr_rdata_int = mscratch_q;
@@ -1456,7 +1469,7 @@ import cve2_pkg::*;
   //////////////////////////
 
 `ifdef RVFI
-    logic [63:0] mstatus_extended_read, mie_extended_read, mip_extended_read, mcause_extended_read;
+    logic [31:0] mstatus_extended_read, mie_extended_read, mip_extended_read, mcause_extended_read;
     struct {
       logic clk;
       logic reset_n;
@@ -1466,17 +1479,17 @@ import cve2_pkg::*;
     assign clknrst_if.reset_n = rst_ni;
 
     struct {
-      logic [63:0]   rvfi_named_csr_rmask;
-      logic [63:0]   rvfi_named_csr_wmask;
-      logic [63:0]   rvfi_named_csr_rdata;
-      logic [63:0]   rvfi_named_csr_wdata;
-  
+      logic [4095:0][31:0] rvfi_named_csr_rmask;
+      logic [4095:0][31:0] rvfi_named_csr_wmask;
+      logic [4095:0][31:0] rvfi_named_csr_rdata;
+      logic [4095:0][31:0] rvfi_named_csr_wdata;
+
       // Generic READ/WRITE values
-      logic [63:0]   rvfi_csr_addr;
-      logic [63:0]   rvfi_csr_rmask;
-      logic [63:0]   rvfi_csr_wmask;
-      logic [63:0]   rvfi_csr_rdata;
-      logic [63:0]   rvfi_csr_wdata;
+      logic [31:0]   rvfi_csr_addr;
+      logic [31:0]   rvfi_csr_rmask;
+      logic [31:0]   rvfi_csr_wmask;
+      logic [31:0]   rvfi_csr_rdata;
+      logic [31:0]   rvfi_csr_wdata;
     } rvfi_csr_if;
 
     // Extended Reads
@@ -1495,10 +1508,10 @@ import cve2_pkg::*;
     assign mip_extended_read[CSR_MEIX_BIT]                       = mip.irq_external;
     assign mip_extended_read[CSR_MFIX_BIT_HIGH:CSR_MFIX_BIT_LOW] = mip.irq_fast;
 
-    assign mcause_extended_read = {32'b0, mcause_q[6], 25'b0, mcause_q[5:0]};
+    assign mcause_extended_read = {mcause_q[6], 25'b0, mcause_q[5:0]};
 
     // Extended Writes
-    logic [63:0] mstatus_extended_write, mie_extended_write, mcause_extended_write;
+    logic [31:0] mstatus_extended_write, mie_extended_write, mcause_extended_write;
 
     assign mie_extended_write[CSR_MSIX_BIT]                       = mie_d.irq_software;
     assign mie_extended_write[CSR_MTIX_BIT]                       = mie_d.irq_timer;
@@ -1511,19 +1524,19 @@ import cve2_pkg::*;
     assign  mstatus_extended_write[CSR_MSTATUS_MPRV_BIT]                             = mstatus_d.mprv;
     assign  mstatus_extended_write[CSR_MSTATUS_TW_BIT]                               = mstatus_d.tw;
 
-    assign mcause_extended_write = {32'b0, mcause_d[6], 25'b0, mcause_d[5:0]};
+    assign mcause_extended_write = {mcause_d[6], 25'b0, mcause_d[5:0]};
 
-    wire [63:0] rvfi_csr_bypass;
+    wire [31:0] rvfi_csr_bypass;
 
     assign rvfi_csr_bypass = csr_save_cause_i | debug_csr_save_i;
 
-    bit [63:0] rvfi_csr_addr;
-    bit [63:0] rvfi_csr_rdata;
-    bit [63:0] rvfi_csr_wdata;
-    bit [63:0] rvfi_csr_rmask;
-    bit [63:0] rvfi_csr_wmask;
-    wire [63:0] rvfi_csr_wmask_q;
-    wire [63:0] rvfi_csr_rmask_q;
+    bit  [31:0] rvfi_csr_addr;
+    bit  [31:0] rvfi_csr_rdata;
+    bit  [31:0] rvfi_csr_wdata;
+    bit  [31:0] rvfi_csr_rmask;
+    bit  [31:0] rvfi_csr_wmask;
+    wire [31:0] rvfi_csr_wmask_q;
+    wire [31:0] rvfi_csr_rmask_q;
     assign rvfi_csr_if.rvfi_csr_addr =  rvfi_csr_addr;
     assign rvfi_csr_if.rvfi_csr_rdata = rvfi_csr_rdata;
     assign rvfi_csr_if.rvfi_csr_wdata = rvfi_csr_wdata;
@@ -1540,12 +1553,12 @@ import cve2_pkg::*;
     end
 
 `define RVFI_CONNECT(CSR_ADDR, CSR_NAME, CSR_RDATA, CSR_WDATA, CSR_RMASK, CSR_WMASK) \
-    bit [63:0] rvfi_``CSR_NAME``_csr_rdata;\
-    bit [63:0] rvfi_``CSR_NAME``_csr_wdata;\
-    bit [63:0] rvfi_``CSR_NAME``_csr_rmask;\
-    bit [63:0] rvfi_``CSR_NAME``_csr_wmask;\
-    wire [63:0] rvfi_``CSR_NAME``_csr_wmask_q; \
-    wire [63:0] rvfi_``CSR_NAME``_csr_rmask_q; \
+    bit  [31:0] rvfi_``CSR_NAME``_csr_rdata;\
+    bit  [31:0] rvfi_``CSR_NAME``_csr_wdata;\
+    bit  [31:0] rvfi_``CSR_NAME``_csr_rmask;\
+    bit  [31:0] rvfi_``CSR_NAME``_csr_wmask;\
+    wire [31:0] rvfi_``CSR_NAME``_csr_wmask_q; \
+    wire [31:0] rvfi_``CSR_NAME``_csr_rmask_q; \
     assign rvfi_csr_if.rvfi_named_csr_rdata[CSR_ADDR] = (!rvfi_csr_bypass) ? rvfi_``CSR_NAME``_csr_rdata : ``CSR_RDATA``; \
     assign rvfi_csr_if.rvfi_named_csr_wdata[CSR_ADDR] = (!rvfi_csr_bypass) ? rvfi_``CSR_NAME``_csr_wdata : ``CSR_WDATA``; \
     assign rvfi_csr_if.rvfi_named_csr_rmask[CSR_ADDR] = (!rvfi_csr_bypass) ? rvfi_``CSR_NAME``_csr_rmask : rvfi_``CSR_NAME``_csr_rmask_q; \
